@@ -2,18 +2,7 @@ import chokidar from "chokidar";
 import db from "../lib/db.ts";
 import crypto from "crypto";
 
-const WATCH_DIR = process.env.WATCH_DIR || "./estudio_fotos";
-
-const watcher = chokidar.watch(WATCH_DIR, {
-  ignored: /(^|[\/\\])\../,
-  persistent: true,
-  awaitWriteFinish: {
-    stabilityThreshold: 2000,
-    pollInterval: 100,
-  },
-});
-
-watcher.on("add", (filePath) => {
+export function handleFileAdded(filePath: string) {
   console.log(`New file detected: ${filePath}`);
 
   try {
@@ -34,6 +23,26 @@ watcher.on("add", (filePath) => {
   } catch (error) {
     console.error("Error processing file:", error);
   }
-});
+}
 
-console.log(`Watching for new files in: ${WATCH_DIR}`);
+export function startWatcher(watchDir: string) {
+  const watcher = chokidar.watch(watchDir, {
+    ignored: /(^|[\/\\])\../,
+    persistent: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 2000,
+      pollInterval: 100,
+    },
+  });
+
+  watcher.on("add", handleFileAdded);
+  console.log(`Watching for new files in: ${watchDir}`);
+  return watcher;
+}
+
+// Simple check for main execution in ESM
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  const WATCH_DIR = process.env.WATCH_DIR || "./estudio_fotos";
+  startWatcher(WATCH_DIR);
+}
