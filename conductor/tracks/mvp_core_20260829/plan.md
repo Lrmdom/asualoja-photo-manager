@@ -2,7 +2,7 @@
 
 ## Phase 1: Project Scaffolding
 - [~] Task: Initialize React Router Project
-    - [ ] Task: Setup project structure, Vite config, and TypeScript config
+    - [x] Task: Setup project structure, Vite config, and TypeScript config
     - [ ] Task: Conductor - User Manual Verification 'Project Scaffolding' (Protocol in workflow.md)
 
 ## Phase 2: Local Persistence & Worker
