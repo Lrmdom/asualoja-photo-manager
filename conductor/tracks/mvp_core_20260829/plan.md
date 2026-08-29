@@ -5,7 +5,7 @@
     - [x] Task: Setup project structure, Vite config, and TypeScript config
     - [x] Task: Conductor - User Manual Verification 'Project Scaffolding' (Protocol in workflow.md)
 
-## Phase 2: Local Persistence & Worker
+## Phase 2: Local Persistence & Worker [checkpoint: d99a28b]
 - [x] Task: Implement SQLite Schema
     - [x] Task: Define database interface and schema using `better-sqlite3`
     - [x] Task: Conductor - User Manual Verification 'Persistence' (Protocol in workflow.md)
