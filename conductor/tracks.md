@@ -14,5 +14,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Complete Dashboard UI & Session Management**
+- [~] **Track: Complete Dashboard UI & Session Management**
   *Link: [./tracks/dashboard_completion_20260829/](./tracks/dashboard_completion_20260829/)*

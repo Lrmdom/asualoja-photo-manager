@@ -18,7 +18,7 @@ Responsável por:
 - Monitorização do estado do sistema e visualização de logs via Server-Sent Events (SSE) em tempo real.
 - Feedback de progresso de uploads.
 
-Tecnologias: React Router v7 Framework Mode, Vite, TypeScript, Tailwind CSS, Server-Sent Events (SSE), Zod para validação.
+Tecnologias: React Router v8 Framework Mode, Vite, TypeScript, Tailwind CSS, Server-Sent Events (SSE), Zod para validação.
 
 ### B. Worker de Monitorização (Background Daemon)
 Processo Node.js independente executado localmente no Mac, responsável por:
@@ -91,7 +91,7 @@ A UI deve permitir listar, ordenar as posições, remover ou substituir imagens 
 
 ## 5. Dashboard de Produtos e Variantes
 
-Consumir a API do Sanity através de loaders nativos do React Router v7.
+Consumir a API do Sanity através de loaders nativos do React Router v8.
 - Listar produtos com suporte a hierarquia de variantes (ex: Produto Principal "TSHIRT001" com variantes "Preto", "Branco", "Azul").
 - Permitir associar a Sessão Fotográfica ao produto pai ou diretamente a uma variante específica.
 - Cada linha da tabela deve mostrar: SKU, Nome, Estado Fotográfico (Sem Fotografias, Em Sessão, Em Upload, Concluído, Erro), Número de imagens atuais, Última atualização e Miniaturas.
@@ -118,7 +118,7 @@ Fornece a implementação completa com as seguintes componentes estruturadas de 
 2. Configurações Globais: 'vite.config.ts', 'tailwind.config.js', 'tsconfig.json' (TypeScript estrito).
 3. Ficheiro de Schema do SQLite e Modelos de Interfaces TypeScript.
 4. Serviços de Infraestrutura: 'sanity.server.ts' (usando @sanity/client) e 'cloudinary.server.ts' (usando o SDK oficial do cloudinary).
-5. Rotas do React Router v7:
+5. Rotas do React Router v8:
    - Loader/Action da rota principal do Dashboard com os filtros e gestão de sessões.
    - Loader/Action da rota de Configurações com validação Zod.
    - Endpoint de Recurso SSE ('/routes/api.logs.ts') para fazer o streaming dos novos registos do SQLite para a interface do browser.
