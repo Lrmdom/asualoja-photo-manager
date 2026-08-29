@@ -11,8 +11,11 @@
   "dependencies": {
     "@react-router/node": "^8",
     "@react-router/serve": "^8",
+    "@sanity/client": "^8.4.0",
     "better-sqlite3": "^13.0.3",
     "chokidar": "^5.0.0",
+    "cloudinary": "^2.11.0",
+    "dotenv": "^17.4.2",
     "isbot": "^5.1.36",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
