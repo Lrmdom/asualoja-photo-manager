@@ -1,7 +1,7 @@
 # Implementation Plan: Build MVP Core: React App, SQLite Schema & Worker Monitoring
 
 ## Phase 1: Project Scaffolding
-- [ ] Task: Initialize React Router Project
+- [~] Task: Initialize React Router Project
     - [ ] Task: Setup project structure, Vite config, and TypeScript config
     - [ ] Task: Conductor - User Manual Verification 'Project Scaffolding' (Protocol in workflow.md)
 
