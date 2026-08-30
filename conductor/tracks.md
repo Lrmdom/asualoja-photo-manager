@@ -14,10 +14,10 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Implement Worker Processing & Integrations**
+- [x] **Track: Implement Worker Processing & Integrations**
   *Link: [./tracks/worker_processing_20260829/](./tracks/worker_processing_20260829/)*
 
 ---
 
-- [x] **Track: Implementar Gestão de Configurações e Estado**
-  *Link: [./tracks/config_management_20260830/](./tracks/config_management_20260830/)*
+- [x] **Track: Dashboard de Produtos e Variantes**
+  *Link: [./tracks/dashboard_products_20260830/](./tracks/dashboard_products_20260830/)*
