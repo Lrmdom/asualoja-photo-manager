@@ -4,4 +4,5 @@ export default [
   index("routes/home.tsx"),
   route("settings", "routes/settings.tsx"),
   route("api/health", "routes/api.health.ts"),
+  route("api/logs", "routes/api.logs.ts"),
 ] satisfies RouteConfig;

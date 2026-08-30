@@ -53,7 +53,7 @@ Cria uma área de Configurações onde as chaves e credenciais sensíveis são g
 
 ### Configurações Locais do Estúdio
 Campos na UI para definir e salvar no servidor:
-- Caminho absoluto da pasta monitorizada (ex: /Estúdio/NovasFotos).
+- Caminho da pasta monitorizada (relativo à raiz do projeto, ex: `public/fotos`).
 - Pasta de quarentena para isolar ficheiros com erro.
 - Política de limpeza automática (eliminar ficheiro local após upload de sucesso).
 - Limite máximo de tentativas (retries) de upload por imagem.
@@ -75,17 +75,20 @@ Utiliza o SQLite para persistência local intermédia através de uma biblioteca
 - 'system_logs': ID, Timestamp, Nível (info, error), Mensagem, SessãoID.
 
 ### Estrutura de Imagens no Sanity (Array de Objetos)
-Em vez de uma única string de URL, o campo no Sanity deve ser um array estruturado mapeado assim:
+Em vez de uma estrutura manual, o campo no Sanity deve utilizar o tipo `cloudinary.asset` fornecido pelo `sanity-plugin-cloudinary`, mapeado como um array no produto/variante:
 ```ts
-images: Array<{
-  url: string;
-  publicId: string;
-  filename: string;
-  position: number;
-  uploadedAt: string;
+cloudinaryList: Array<{
+  _type: "cloudinary.asset",
+  public_id: string,
+  secure_url: string,
+  url: string,
+  format: string,
+  width: number,
+  height: number,
+  created_at: string
 }>
 ```
-A UI deve permitir listar, ordenar as posições, remover ou substituir imagens dentro deste array do produto.
+A UI deve permitir listar, ordenar as posições, remover ou substituir imagens dentro deste array.
 
 ---
 

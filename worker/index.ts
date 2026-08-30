@@ -1,14 +1,44 @@
+import "dotenv/config";
 import chokidar from "chokidar";
-import db from "../lib/db.ts";
+import db from "../lib/db";
 import crypto from "crypto";
-import { sanityClient } from "../app/sanity.server.ts";
-import { cloudinary } from "../app/cloudinary.server.ts";
+import fs from "fs";
+import path from "path";
+import { sanityClient } from "../app/sanity.server";
+import { cloudinary } from "../app/cloudinary.server";
+
+const MAX_RETRIES = 3;
+
+// ... (resto do código igual) ...
+import url from "url";
+
+// ... (imports) ...
+
+// Corrigir verificação de ESM para execução direta
+if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
+  const watchDir = db.prepare("SELECT value FROM studio_settings WHERE key = 'path'").get() as { value: string };
+  if (watchDir) {
+    startWatcher(watchDir.value);
+  } else {
+    console.error("Caminho monitorizado não configurado na DB.");
+  }
+}
 
 export async function processQueue() {
-  const item = db.prepare("SELECT * FROM upload_queue WHERE estado = 'Pendente' OR estado = 'Falhou' LIMIT 1").get() as any;
+  const stmt = db.prepare(`
+    SELECT q.*, s.sku 
+    FROM upload_queue q 
+    JOIN sessions s ON q.sessao_id = s.id 
+    WHERE (q.estado = 'Pendente' OR q.estado = 'Falhou')
+    AND (q.tentativas < ?)
+    ORDER BY q.tentativas ASC
+    LIMIT 1
+  `);
+  const item = stmt.get(MAX_RETRIES) as any;
+
   if (!item) return;
 
-  console.log(`Processing: ${item.caminho_local}`);
+  console.log(`Processing: ${item.caminho_local} (Attempt: ${item.tentativas + 1})`);
   
   try {
     db.prepare("UPDATE upload_queue SET estado = 'Em Upload' WHERE id = ?").run(item.id);
@@ -18,20 +48,59 @@ export async function processQueue() {
       folder: "ecommerce_photos",
     });
 
-    // Update Sanity (Placeholder logic - need session mapping)
-    // For now, simple patch to a document
-    await sanityClient.patch("product-placeholder").setIfMissing({ images: [] }).insert("after", "images[-1]", [{
-      _type: "image",
-      url: result.secure_url,
-      publicId: result.public_id,
-      uploadedAt: new Date().toISOString(),
-    }]).commit();
+    // Patch Sanity
+    await sanityClient
+      .fetch(`*[_type == "variant" && sku == $sku][0]`, { sku: item.sku })
+      .then((variant) => {
+        if (!variant) throw new Error(`Variant not found: ${item.sku}`);
+        return sanityClient
+          .patch(variant._id)
+          .setIfMissing({ cloudinaryList: [] })
+          .insert("after", "cloudinaryList[-1]", [{
+            _type: "cloudinary.asset",
+            public_id: result.public_id,
+            secure_url: result.secure_url,
+            url: result.secure_url,
+            format: result.format,
+            width: result.width,
+            height: result.height,
+            created_at: new Date().toISOString(),
+          }])
+          .commit();
+      });
 
     db.prepare("UPDATE upload_queue SET estado = 'Concluído' WHERE id = ?").run(item.id);
-    console.log(`Uploaded: ${result.secure_url}`);
+    console.log(`Uploaded and patched: ${result.secure_url}`);
   } catch (error) {
-    console.error("Upload failed:", error);
-    db.prepare("UPDATE upload_queue SET estado = 'Falhou', tentativas = tentativas + 1 WHERE id = ?").run(item.id);
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    console.error("Upload/Patch failed:", errorMsg);
+    
+    const newTentativas = item.tentativas + 1;
+    
+    if (newTentativas >= MAX_RETRIES) {
+      // Quarantine
+      const quarantineDir = db.prepare("SELECT value FROM studio_settings WHERE key = 'quarantine_path'").get() as { value: string } | undefined;
+      const destDir = path.resolve(quarantineDir?.value || "quarantine");
+      
+      // Criar diretório se não existir
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+      
+      const destPath = path.join(destDir, path.basename(item.caminho_local));
+      
+      // Verificar se o ficheiro existe antes de mover
+      if (fs.existsSync(item.caminho_local)) {
+        fs.renameSync(item.caminho_local, destPath);
+        console.log(`Ficheiro movido para quarentena: ${destPath}`);
+      }
+      
+      db.prepare("UPDATE upload_queue SET estado = 'Falhou', tentativas = ?, erro_mensagem = ? WHERE id = ?")
+        .run(newTentativas, `Max retries reached. Moved to ${destPath}`, item.id);
+    } else {
+      db.prepare("UPDATE upload_queue SET estado = 'Falhou', tentativas = ?, erro_mensagem = ? WHERE id = ?")
+        .run(newTentativas, errorMsg, item.id);
+    }
   }
 }
 
@@ -39,19 +108,25 @@ export function handleFileAdded(filePath: string) {
   console.log(`New file detected: ${filePath}`);
 
   try {
+    const sessaoAtiva = db.prepare("SELECT id FROM sessions WHERE estado = 'Ativa' LIMIT 1").get() as { id: string } | undefined;
+    if (!sessaoAtiva) {
+      console.warn("Nenhuma sessão ativa encontrada. Ficheiro ignorado.");
+      return;
+    }
+
     const id = crypto.randomUUID();
     
-    // Add to queue
+    // Add to queue with sessao_id
     const stmt = db.prepare(
-      "INSERT INTO upload_queue (id, caminho_local, estado) VALUES (?, ?, ?)"
+      "INSERT INTO upload_queue (id, caminho_local, estado, sessao_id) VALUES (?, ?, ?, ?)"
     );
-    stmt.run(id, filePath, "Pendente");
+    stmt.run(id, filePath, "Pendente", sessaoAtiva.id);
 
     // Log
     const logStmt = db.prepare(
-      "INSERT INTO system_logs (timestamp, nivel, mensagem) VALUES (?, ?, ?)"
+      "INSERT INTO system_logs (timestamp, nivel, mensagem, sessao_id) VALUES (?, ?, ?, ?)"
     );
-    logStmt.run(new Date().toISOString(), "info", `Ficheiro detetado: ${filePath}`);
+    logStmt.run(new Date().toISOString(), "info", `Ficheiro detetado e associado: ${filePath}`, sessaoAtiva.id);
 
   } catch (error) {
     console.error("Error processing file:", error);
@@ -76,24 +151,3 @@ export function startWatcher(watchDir: string) {
   console.log(`Watching for new files in: ${watchDir}`);
   return watcher;
 }
-
-export async function processQueue() {
-  const stmt = db.prepare("SELECT * FROM upload_queue WHERE estado = 'Pendente' LIMIT 1");
-  const task = stmt.get();
-
-  if (task) {
-    console.log(`Processing task: ${task.id}`);
-    
-    // Update state to 'Em Upload'
-    db.prepare("UPDATE upload_queue SET estado = 'Em Upload' WHERE id = ?").run(task.id);
-
-    // TODO: Implement Cloudinary + Sanity logic
-    
-    // For now, mark as Concluido
-    db.prepare("UPDATE upload_queue SET estado = 'Concluido' WHERE id = ?").run(task.id);
-    console.log(`Task ${task.id} completed.`);
-  }
-}
-
-// Start processing loop
-setInterval(processQueue, 5000);

@@ -9,7 +9,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     sku TEXT NOT NULL,
-    variante_id TEXT,
+    variante_nome TEXT,
     data_inicio TEXT NOT NULL,
     data_fim TEXT,
     operador TEXT,
@@ -21,7 +21,9 @@ db.exec(`
     caminho_local TEXT NOT NULL,
     estado TEXT NOT NULL,
     tentativas INTEGER DEFAULT 0,
-    erro_mensagem TEXT
+    erro_mensagem TEXT,
+    sessao_id TEXT,
+    FOREIGN KEY(sessao_id) REFERENCES sessions(id)
   );
 
   CREATE TABLE IF NOT EXISTS system_logs (
@@ -31,6 +33,11 @@ db.exec(`
     mensagem TEXT NOT NULL,
     sessao_id TEXT,
     FOREIGN KEY(sessao_id) REFERENCES sessions(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS studio_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
   );
 `);
 

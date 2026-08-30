@@ -1,4 +1,4 @@
-import { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs } from "@react-router/node";
 import db from "../db.server";
 
 export async function loader({ request }: ActionFunctionArgs) {
