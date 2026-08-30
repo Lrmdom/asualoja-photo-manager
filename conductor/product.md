@@ -65,7 +65,7 @@ Apresentar indicadores visuais na UI:
 - Sanity (Ligado / Desligado)
 - Cloudinary (Ligado / Desligado)
 - Worker de Monitorização (Ativo / Inativo)
-- Pasta Monitorizada (Disponível / Indisponível)
+- Pasta Monitorizada (Configurável e Verificada em tempo real)
 
 ---
 

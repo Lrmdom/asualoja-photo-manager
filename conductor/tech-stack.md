@@ -24,6 +24,7 @@ Este documento descreve as tecnologias selecionadas para o desenvolvimento da ap
     *   `sessions` (SKU, Variante, estado da sessão)
     *   `upload_queue` (lista de imagens detetadas, estado do upload, erros, retries)
     *   `system_logs` (logs estruturados partilhados com a UI por SSE)
+*   `studio_settings` (armazenamento de configurações do estúdio)
 
 ## 5. Serviços e APIs Externas (Integradores)
 *   **Sanity PIM (Product Information Management):** Ligação através do `@sanity/client` para ler dados de produtos/variantes e fazer push assíncrono de objetos de imagens para o catálogo.
