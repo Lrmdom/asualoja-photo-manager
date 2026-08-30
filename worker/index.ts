@@ -77,9 +77,23 @@ export function startWatcher(watchDir: string) {
   return watcher;
 }
 
-// Simple check for main execution in ESM
-const isMain = import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
-  const WATCH_DIR = process.env.WATCH_DIR || "./estudio_fotos";
-  startWatcher(WATCH_DIR);
+export async function processQueue() {
+  const stmt = db.prepare("SELECT * FROM upload_queue WHERE estado = 'Pendente' LIMIT 1");
+  const task = stmt.get();
+
+  if (task) {
+    console.log(`Processing task: ${task.id}`);
+    
+    // Update state to 'Em Upload'
+    db.prepare("UPDATE upload_queue SET estado = 'Em Upload' WHERE id = ?").run(task.id);
+
+    // TODO: Implement Cloudinary + Sanity logic
+    
+    // For now, mark as Concluido
+    db.prepare("UPDATE upload_queue SET estado = 'Concluido' WHERE id = ?").run(task.id);
+    console.log(`Task ${task.id} completed.`);
+  }
 }
+
+// Start processing loop
+setInterval(processQueue, 5000);

@@ -1,7 +1,7 @@
 # Implementation Plan: Implement Worker Processing & Integrations
 
 ## Phase 1: Worker Processing Loop
-- [ ] Task: Implement queue consumer loop
+- [~] Task: Implement queue consumer loop
     - [ ] Task: Create async loop in worker to fetch 'Pendente' tasks
     - [ ] Task: Conductor - User Manual Verification 'Processing Loop' (Protocol in workflow.md)
 

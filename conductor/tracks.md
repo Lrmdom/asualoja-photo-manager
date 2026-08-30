@@ -14,5 +14,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Implement Worker Processing & Integrations**
+- [~] **Track: Implement Worker Processing & Integrations**
   *Link: [./tracks/worker_processing_20260829/](./tracks/worker_processing_20260829/)*
