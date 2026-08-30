@@ -1,5 +1,6 @@
-import { Form, redirect, useLoaderData } from "react-router";
+import { Form, redirect, useLoaderData, Link } from "react-router";
 import db from "../db.server";
+import { Button } from "../../components/ui/button";
 
 export async function loader() {
   const settings = db.prepare("SELECT * FROM studio_settings").all() as { key: string; value: string }[];
@@ -25,18 +26,26 @@ export default function Settings() {
   const settings = useLoaderData<typeof loader>();
   
   return (
-    <div className="p-8 bg-slate-900 min-h-screen text-slate-100">
-      <h1 className="text-3xl font-bold mb-6">Configurações</h1>
-      <Form method="post" className="bg-slate-800 p-6 rounded-lg max-w-md">
-        <label className="block mb-4">
-          Pasta de Fotos:
-          <input type="text" name="path" className="w-full bg-slate-700 p-2 mt-1" defaultValue={settings.path || "photos"} />
-        </label>
-        <label className="block mb-4">
-          Pasta de Quarentena:
-          <input type="text" name="quarantine_path" className="w-full bg-slate-700 p-2 mt-1" defaultValue={settings.quarantine_path || "quarantine"} />
-        </label>
-        <button type="submit" className="bg-blue-600 px-4 py-2 rounded">Salvar</button>
+    <div className="p-4 md:p-8 bg-background min-h-screen text-foreground">
+      <div className="flex items-center gap-4 mb-6">
+        <Button asChild variant="outline" size="sm">
+          <Link to="/">Voltar</Link>
+        </Button>
+        <h1 className="text-3xl font-bold">Configurações</h1>
+      </div>
+      
+      <Form method="post" className="bg-card border border-border p-6 rounded-lg max-w-md shadow-sm">
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Pasta de Fotos:</label>
+            <input type="text" name="path" className="w-full bg-background border border-input p-2 mt-1 rounded-md focus:outline-none focus:ring-2 focus:ring-ring" defaultValue={settings.path || "photos"} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Pasta de Quarentena:</label>
+            <input type="text" name="quarantine_path" className="w-full bg-background border border-input p-2 mt-1 rounded-md focus:outline-none focus:ring-2 focus:ring-ring" defaultValue={settings.quarantine_path || "quarantine"} />
+          </div>
+          <Button type="submit">Salvar Alterações</Button>
+        </div>
       </Form>
     </div>
   );
