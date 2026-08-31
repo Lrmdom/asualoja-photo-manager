@@ -5,9 +5,11 @@ import { toast } from "sonner";
 import db from "../db.server";
 import crypto from "crypto";
 import { sanityClient } from "../sanity.server";
+import { cloudinary } from "../cloudinary.server";
 import { defineQuery } from "groq";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
+import { PhotoManagerModal } from "../../components/PhotoManagerModal";
 
 const TAXONS_QUERY = defineQuery(/* groq */ `*[_type == "taxon"]{
   _id,
@@ -20,7 +22,8 @@ const TAXONS_QUERY = defineQuery(/* groq */ `*[_type == "taxon"]{
     "variantes": variants[]->{
       _id,
       name,
-      sku
+      sku,
+      cloudinaryList
     }
   }
 }`);
@@ -36,7 +39,8 @@ export async function loader() {
     "variantes": variants[]->{
       _id,
       name,
-      sku
+      sku,
+      cloudinaryList
     }
   }`));
   
@@ -76,6 +80,20 @@ export async function action({ request }: { request: Request }) {
   } else if (intent === "reprocess") {
     const id = formData.get("id") as string;
     db.prepare("UPDATE upload_queue SET estado = 'Pendente', tentativas = 0, erro_mensagem = NULL WHERE id = ?").run(id);
+  } else if (intent === "delete-photo") {
+    const variantId = formData.get("variantId") as string;
+    const key = formData.get("key") as string;
+    const public_id = formData.get("public_id") as string;
+
+    await sanityClient.patch(variantId).unset([`cloudinaryList[_key=="${key}"]`]).commit();
+    await cloudinary.uploader.destroy(public_id);
+    return redirect("/");
+  } else if (intent === "reorder-photos") {
+    const variantId = formData.get("variantId") as string;
+    const order = JSON.parse(formData.get("order") as string);
+
+    await sanityClient.patch(variantId).set({ cloudinaryList: order }).commit();
+    return redirect("/");
   }
 
   return redirect("/");
@@ -100,6 +118,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 
 export default function Home() {
   const { taxons, uncategorizedProducts, sessions, quarentena } = useLoaderData<typeof loader>();
+  const [selectedVariant, setSelectedVariant] = useState<any>(null);
   const logs = useEventSource("/api/logs", { event: "message" });
   const [health, setHealth] = useState<any>(null);
   const [filter, setFilter] = useState("");
@@ -144,7 +163,6 @@ export default function Home() {
   const groupedProducts = useMemo(() => {
     const groups: any = {};
     
-    // Process categorized products
     filteredData.filteredTaxons.forEach((t: any) => {
       const taxonomy = t.taxonomy || "Sem Categoria";
       const taxon = t.name || "Geral";
@@ -153,15 +171,12 @@ export default function Home() {
       
       t.products.forEach((p: any) => {
         if (!groups[taxonomy][taxon]) groups[taxonomy][taxon] = [];
-        // Only add if not already in this taxon group
         if (!groups[taxonomy][taxon].find((existing: any) => existing._id === p._id)) {
           groups[taxonomy][taxon].push(p);
         }
       });
     });
 
-    // Process uncategorized products
-    // Determine which products have been categorized at all
     const categorizedProductIds = new Set();
     filteredData.filteredTaxons.forEach(t => t.products.forEach((p: any) => categorizedProductIds.add(p._id)));
     
@@ -177,7 +192,7 @@ export default function Home() {
 
   return (
     <div className="p-4 md:p-8 bg-background min-h-screen text-foreground">
-      {/* ... (keep header and session block unchanged) ... */}
+      {/* ... (header and session block unchanged) ... */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Dashboard de Estúdio</h1>
         <Button asChild variant="outline">
@@ -271,39 +286,47 @@ export default function Home() {
                               <div className="w-full mt-2 border-t border-border">
                                 {p.variantes?.map((v: any) => {
                                   const isActive = sessions.some((s: any) => s.sku === v.sku);
+                                  const photoCount = v.cloudinaryList?.length || 0;
                                   return (
                                     <div id={`variant-${v.sku}`} key={v.sku} className="flex items-center justify-between py-2 border-b border-border text-sm">
-                                      <span className="font-mono text-xs text-sky-600">
-                                        <Highlight text={v.sku || ""} query={filter} />
-                                      </span>
-                                      <span className="truncate mx-2">
-                                        <Highlight text={v.name || ""} query={filter} />
-                                      </span>
-                                      {isActive ? (
-                                        <Form method="post" className="flex gap-2">
-                                          <Button disabled size="sm" variant="outline" className="text-sky-600 border-sky-600">
-                                            Ativo
-                                          </Button>
-                                          <input type="hidden" name="id" value={sessions.find(s => s.sku === v.sku)?.id} />
-                                          <Button
-                                            type="submit"
-                                            name="intent"
-                                            value="stop"
-                                            size="sm"
-                                            className="bg-amber-500 text-gray-900 hover:bg-amber-600 hover:scale-105 transition-all duration-200"
-                                          >
-                                            Parar
-                                          </Button>
-                                        </Form>
-                                      ) : (
-                                        <Form method="post" onSubmit={(e) => handleStartSession(e, v.sku)}>
-                                          <input type="hidden" name="sku" value={v.sku} />
-                                          <input type="hidden" name="variante" value={v.name} />
-                                          <Button type="submit" name="intent" value="start" size="sm">
-                                            Iniciar
-                                          </Button>
-                                        </Form>
-                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs text-sky-600">
+                                          <Highlight text={v.sku || ""} query={filter} />
+                                        </span>
+                                        <span className="truncate mx-2">
+                                          <Highlight text={v.name || ""} query={filter} />
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectedVariant(v)}>
+                                          {photoCount} fotos
+                                        </Button>
+                                        {isActive ? (
+                                          <Form method="post" className="flex gap-2">
+                                            <Button disabled size="sm" variant="outline" className="text-sky-600 border-sky-600">
+                                              Ativo
+                                            </Button>
+                                            <input type="hidden" name="id" value={sessions.find(s => s.sku === v.sku)?.id} />
+                                            <Button
+                                              type="submit"
+                                              name="intent"
+                                              value="stop"
+                                              size="sm"
+                                              className="bg-amber-500 text-gray-900 hover:bg-amber-600 hover:scale-105 transition-all duration-200"
+                                            >
+                                              Parar
+                                            </Button>
+                                          </Form>
+                                        ) : (
+                                          <Form method="post" onSubmit={(e) => handleStartSession(e, v.sku)}>
+                                            <input type="hidden" name="sku" value={v.sku} />
+                                            <input type="hidden" name="variante" value={v.name} />
+                                            <Button type="submit" name="intent" value="start" size="sm">
+                                              Iniciar
+                                            </Button>
+                                          </Form>
+                                        )}
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -318,8 +341,6 @@ export default function Home() {
               </details>
             ))}
           </div>
-
-
 
           <h2 className="text-lg font-semibold mt-8 mb-4 text-destructive">Falhas</h2>
           {quarentena.map((q: any) => (
@@ -342,6 +363,10 @@ export default function Home() {
           </div>
         </div>
       </div>
+      
+      {selectedVariant && (
+        <PhotoManagerModal variant={selectedVariant} onClose={() => setSelectedVariant(null)} />
+      )}
     </div>
   );
 }
