@@ -1,6 +1,7 @@
 import { useLoaderData, Form, redirect, Link } from "react-router";
 import { useEventSource } from "remix-utils/sse/react";
 import { useEffect, useState, useMemo, useRef } from "react";
+import { toast } from "sonner";
 import db from "../db.server";
 import crypto from "crypto";
 import { sanityClient } from "../sanity.server";
@@ -55,6 +56,23 @@ export async function action({ request }: { request: Request }) {
   return redirect("/");
 }
 
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${query})`, "gi"));
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={index} className="bg-yellow-200 text-foreground">{part}</mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 export default function Home() {
   const { products, sessions, quarentena } = useLoaderData<typeof loader>();
   const logs = useEventSource("/api/logs", { event: "message" });
@@ -77,9 +95,13 @@ export default function Home() {
   };
 
   const filteredProducts = useMemo(() => {
-    return products.filter((p: any) => 
-      (p.sku?.toLowerCase() || "").includes(filter.toLowerCase()) || 
-      (p.name?.toLowerCase() || "").includes(filter.toLowerCase())
+    return products.filter((p: any) =>
+      (p.sku?.toLowerCase() || "").includes(filter.toLowerCase()) ||
+      (p.name?.toLowerCase() || "").includes(filter.toLowerCase()) ||
+      p.variantes?.some((v: any) =>
+        (v.sku?.toLowerCase() || "").includes(filter.toLowerCase()) ||
+        (v.name?.toLowerCase() || "").includes(filter.toLowerCase())
+      )
     );
   }, [products, filter]);
 
@@ -104,18 +126,12 @@ export default function Home() {
             <h2 className="text-sm font-semibold text-blue-900">Sessão Ativa:</h2>
             {sessions.map((s: any) => (
               <div key={s.id} className="flex items-center gap-4 text-sm text-blue-900">
+                <UploadCamera sessionId={s.id} sku={s.sku} />
                 <a href={`#variant-${s.sku}`} className="font-medium hover:underline cursor-pointer">{s.sku}</a>
                 <span className="text-blue-900">- <span className="text-green-700 font-bold">{s.estado}</span></span>
                 <Form method="post">
                   <input type="hidden" name="id" value={s.id} />
-                  <Button
-                    type="submit"
-                    name="intent"
-                    value="stop"
-                    size="sm"
-                    variant="destructive"
-                    className={cn(notification && "animate-pulse animate-flash-attention ring-2 ring-white ring-offset-2")}
-                  >
+                  <Button type="submit" name="intent" value="stop" size="sm" variant="destructive">
                     Terminar
                   </Button>
                 </Form>
@@ -128,8 +144,8 @@ export default function Home() {
       <div className="flex flex-wrap gap-2 mb-6">
         {health ? (
           Object.entries(health).map(([key, value]) => (
-            <div 
-              key={key} 
+            <div
+              key={key}
               className={`px-3 py-1 rounded-full font-semibold text-xs flex items-center gap-2 ${
                 value ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
               }`}
@@ -143,14 +159,14 @@ export default function Home() {
         )}
       </div>
 
-      <input 
-        type="text" 
-        placeholder="Filtrar por SKU ou Nome..." 
+      <input
+        type="text"
+        placeholder="Filtrar por SKU ou Nome..."
         className="w-full bg-background border border-input p-3 rounded-md mb-6 focus:outline-none focus:ring-2 focus:ring-ring"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-card border border-border p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Catálogo</h2>
@@ -158,11 +174,15 @@ export default function Home() {
             {filteredProducts.map((p: any) => {
               const hasActiveVariant = p.variantes?.some((v: any) => sessions.some((s: any) => s.sku === v.sku));
               return (
-                <details key={p._id} className={cn("bg-muted rounded p-2 transition-all", hasActiveVariant && "ring-2 ring-sky-500")}>
+                <details key={p._id} className={cn("bg-muted rounded p-2 transition-all", hasActiveVariant && "ring-2 ring-sky-500")} open={filter.length > 0}>
                   <summary className={cn("font-medium cursor-pointer text-sm flex items-center justify-between", hasActiveVariant && "text-sky-700")}>
                     <div className="flex items-center">
-                      <span className="font-mono text-xs text-primary mr-2">{p.sku}</span>
-                      <span className="text-foreground">{p.name}</span>
+                      <span className="font-mono text-xs text-primary mr-2">
+                          <Highlight text={p.sku || ""} query={filter} />
+                      </span>
+                      <span className="text-foreground">
+                          <Highlight text={p.name || ""} query={filter} />
+                      </span>
                     </div>
                     <div className="flex items-center">
                       {hasActiveVariant && <div className="w-2 h-2 rounded-full bg-sky-500 mr-2 animate-pulse" />}
@@ -174,18 +194,22 @@ export default function Home() {
                       const isActive = sessions.some((s: any) => s.sku === v.sku);
                       return (
                         <div id={`variant-${v.sku}`} key={v.sku} className="flex items-center justify-between py-2 border-b border-border text-sm">
-                          <span className="font-mono text-xs text-sky-600">{v.sku}</span>
-                          <span className="truncate mx-2">{v.name}</span>
+                          <span className="font-mono text-xs text-sky-600">
+                            <Highlight text={v.sku || ""} query={filter} />
+                          </span>
+                          <span className="truncate mx-2">
+                            <Highlight text={v.name || ""} query={filter} />
+                          </span>
                           {isActive ? (
                             <Form method="post" className="flex gap-2">
                               <Button disabled size="sm" variant="outline" className="text-sky-600 border-sky-600">
                                 Ativo
                               </Button>
                               <input type="hidden" name="id" value={sessions.find(s => s.sku === v.sku)?.id} />
-                              <Button 
-                                type="submit" 
-                                name="intent" 
-                                value="stop" 
+                              <Button
+                                type="submit"
+                                name="intent"
+                                value="stop"
                                 size="sm"
                                 className="bg-amber-500 text-gray-900 hover:bg-amber-600 hover:scale-105 transition-all duration-200"
                               >
@@ -209,7 +233,8 @@ export default function Home() {
               );
             })}
           </div>
-          
+
+
           <h2 className="text-lg font-semibold mt-8 mb-4 text-destructive">Falhas</h2>
           {quarentena.map((q: any) => (
             <div key={q.id} className="flex justify-between items-center py-2 border-b border-border text-sm">
@@ -231,6 +256,46 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </div >
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Componente Auxiliar isolado (Fora da função Home)
+// -----------------------------------------------------------------------------
+
+interface UploadCameraProps {
+  sessionId: string;
+  sku: string;
+}
+
+function UploadCamera(props: UploadCameraProps) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setUploading(true);
+    const toastId = toast.loading("A enviar foto...");
+    const formData = new FormData();
+    formData.append("photo", e.target.files[0]);
+    formData.append("sku", props.sku);
+    formData.append("sessionId", props.sessionId);
+
+    try {
+      const res = await fetch("/api/upload-photo", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Falha no upload");
+      toast.success("Foto enviada com sucesso!", { id: toastId });
+    } catch (err) {
+      toast.error("Erro ao enviar foto.", { id: toastId, duration: Infinity, dismissible: true });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <label className={cn("cursor-pointer p-2 rounded-full transition-colors", uploading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-100")}>
+      <span role="img" aria-label="camera" className="text-xl">{uploading ? "⏳" : "📷"}</span>
+      <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploading} onChange={handleUpload} />
+    </label>
   );
 }

@@ -56,20 +56,29 @@ export async function processQueue() {
         return sanityClient
           .patch(variant._id)
           .setIfMissing({ cloudinaryList: [] })
-          .insert("after", "cloudinaryList[-1]", [{
-            _type: "cloudinary.asset",
-            public_id: result.public_id,
-            secure_url: result.secure_url,
-            url: result.secure_url,
-            format: result.format,
-            width: result.width,
-            height: result.height,
-            created_at: new Date().toISOString(),
-          }])
-          .commit();
+          .append("cloudinaryList", [
+            {
+              _key: crypto.randomUUID(),
+              _type: "cloudinary.asset",
+              public_id: result.public_id,
+              resource_type: result.resource_type || "image",
+              type: result.type || "upload",
+              format: result.format,
+              version: result.version,
+              url: result.url,
+              secure_url: result.secure_url,
+              width: result.width,
+              height: result.height,
+              bytes: result.bytes,
+              created_at: result.created_at || new Date().toISOString(),
+              raw: result,
+            }
+          ])
+          .commit({ autoGenerateArrayKeys: true });
       });
 
     db.prepare("UPDATE upload_queue SET estado = 'Concluído' WHERE id = ?").run(item.id);
+    console.log(result);
     console.log(`Uploaded and patched: ${result.secure_url}`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";

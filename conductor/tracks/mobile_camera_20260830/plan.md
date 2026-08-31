@@ -1,31 +1,36 @@
-# Implementation Plan: Mobile Camera Integration
+# Plan: Mobile Camera Capture Integration
 
-## Phase 1: Setup & Mobile Interface
-- [ ] Task: Create mobile route definition in `app/routes.ts`
-    - [ ] Test: Write failing tests for mobile route accessibility
-    - [ ] Implement: Create `app/routes/mobile.tsx`
-- [ ] Task: Conductor - User Manual Verification 'Setup & Mobile Interface' (Protocol in workflow.md)
+## Objective
+Enable mobile users to capture and upload images directly to the active session using their device's camera.
 
-## Phase 2: Camera & Upload Integration
-- [ ] Task: Implement mobile camera capture component
-    - [ ] Test: Write failing tests for camera access and image capture
-    - [ ] Implement: Create camera component with file input
-- [ ] Task: Implement Direct Upload API client
-    - [ ] Test: Write failing tests for API client
-    - [ ] Implement: Implement direct upload service
-- [ ] Task: Implement Local Bridge client
-    - [ ] Test: Write failing tests for bridge client
-    - [ ] Implement: Implement bridge service
-- [ ] Task: Implement PWA Cache/Sync
-    - [ ] Test: Write failing tests for PWA sync
-    - [ ] Implement: Configure PWA service worker
-- [ ] Task: Conductor - User Manual Verification 'Camera & Upload Integration' (Protocol in workflow.md)
+## Architectural Decision
+To maintain the integrity of the existing data flow (Worker monitors local folder -> uploads to Cloudinary -> updates Sanity), the mobile upload will be saved directly into the monitored directory, allowing the existing worker pipeline to handle processing, logging, and state management.
 
-## Phase 3: Session & Catalog Integration
-- [ ] Task: Associate mobile photos with active sessions
-    - [ ] Test: Write failing tests for session association
-    - [ ] Implement: Update action logic to link uploads
-- [ ] Task: Update Sanity catalog with mobile uploads
-    - [ ] Test: Write failing tests for Sanity update
-    - [ ] Implement: Update Sanity integration
-- [ ] Task: Conductor - User Manual Verification 'Session & Catalog Integration' (Protocol in workflow.md)
+## Scope & Impact
+- **Impact:** Low risk; creates a new ingestion endpoint.
+- **Scope:** 
+  - UI: Add `input type="file" capture="environment"` button to the active session card.
+  - API: New route `app/routes/api.upload-photo.ts` to handle multipart uploads.
+  - Integration: Saving files to the worker-monitored directory.
+
+## Implementation Steps
+
+### 1. UI Implementation
+- Update `app/routes/home.tsx`:
+  - Add file input hidden behind a camera icon button in the Active Session component.
+  - Implement `onChange` handler to submit the file to `/api/upload-photo`.
+
+### 2. API Implementation
+- Create `app/routes/api.upload-photo.ts`:
+  - Handle `POST` request with multipart/form-data.
+  - Save the received file into the directory monitored by the worker.
+  - Ensure unique filenames using SKU + timestamp to prevent collisions.
+
+### 3. Worker Compatibility
+- Verify the worker's `chokidar` config handles these files correctly.
+
+## Verification
+- Capture image using mobile browser.
+- Verify file appears in monitored folder.
+- Verify worker picks up file, processes it, and updates Sanity/Cloudinary.
+- Verify session logs update in UI.
