@@ -114,10 +114,14 @@ export async function processQueue() {
 }
 
 export function handleFileAdded(filePath: string) {
-  console.log(`New file detected: ${filePath}`);
+  const absoluteFilePath = path.resolve(filePath);
+  console.log(`New file detected (raw): ${filePath}`);
+  console.log(`New file detected (absolute): ${absoluteFilePath}`);
 
   try {
-    const sessaoAtiva = db.prepare("SELECT id FROM sessions WHERE estado = 'Ativa' LIMIT 1").get() as { id: string } | undefined;
+    const sessaoAtiva = db.prepare("SELECT id, estado FROM sessions WHERE estado = 'Ativa' LIMIT 1").get() as { id: string, estado: string } | undefined;
+    console.log("Sessão ativa query result:", sessaoAtiva);
+    
     if (!sessaoAtiva) {
       console.warn("Nenhuma sessão ativa encontrada. Ficheiro ignorado.");
       return;

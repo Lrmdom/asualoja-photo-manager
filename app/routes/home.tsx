@@ -9,22 +9,47 @@ import { defineQuery } from "groq";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 
-const PRODUCTS_QUERY = defineQuery(/* groq */ `*[_type == "product"]{
+const TAXONS_QUERY = defineQuery(/* groq */ `*[_type == "taxon"]{
   _id,
-  "sku": code,
   name,
-  "variantes": variants[]->{
+  "taxonomy": taxonomy->name,
+  "products": products[]->{
     _id,
+    "sku": code,
     name,
-    sku
+    "variantes": variants[]->{
+      _id,
+      name,
+      sku
+    }
   }
 }`);
 
 export async function loader() {
-  const products = await sanityClient.fetch(PRODUCTS_QUERY);
+  const taxons = await sanityClient.fetch(TAXONS_QUERY);
+  
+  // Fetch products not associated with any taxon
+  const allProducts = await sanityClient.fetch(defineQuery(/* groq */ `*[_type == "product"]{
+    _id,
+    "sku": code,
+    name,
+    "variantes": variants[]->{
+      _id,
+      name,
+      sku
+    }
+  }`));
+  
+  const productsWithTaxons = new Set(
+    taxons.flatMap((t: any) => t.products?.map((p: any) => p._id) || [])
+  );
+  
+  const uncategorizedProducts = allProducts?.filter((p: any) => !productsWithTaxons.has(p._id)) || [];
+  
   const sessions = db.prepare("SELECT * FROM sessions WHERE estado != 'Terminada'").all();
   const quarentena = db.prepare("SELECT * FROM upload_queue WHERE estado = 'Falhou'").all();
-  return { products, sessions, quarentena };
+  
+  return { taxons, uncategorizedProducts, sessions, quarentena };
 }
 
 export async function action({ request }: { request: Request }) {
@@ -74,7 +99,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 export default function Home() {
-  const { products, sessions, quarentena } = useLoaderData<typeof loader>();
+  const { taxons, uncategorizedProducts, sessions, quarentena } = useLoaderData<typeof loader>();
   const logs = useEventSource("/api/logs", { event: "message" });
   const [health, setHealth] = useState<any>(null);
   const [filter, setFilter] = useState("");
@@ -94,19 +119,65 @@ export default function Home() {
     }
   };
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((p: any) =>
-      (p.sku?.toLowerCase() || "").includes(filter.toLowerCase()) ||
-      (p.name?.toLowerCase() || "").includes(filter.toLowerCase()) ||
+  const filteredData = useMemo(() => {
+    const filterLower = filter.toLowerCase();
+    
+    const filterProducts = (products: any[]) => (products || []).filter((p: any) =>
+      (p.sku?.toLowerCase() || "").includes(filterLower) ||
+      (p.name?.toLowerCase() || "").includes(filterLower) ||
       p.variantes?.some((v: any) =>
-        (v.sku?.toLowerCase() || "").includes(filter.toLowerCase()) ||
-        (v.name?.toLowerCase() || "").includes(filter.toLowerCase())
+        (v.sku?.toLowerCase() || "").includes(filterLower) ||
+        (v.name?.toLowerCase() || "").includes(filterLower)
       )
     );
-  }, [products, filter]);
+
+    const filteredTaxons = (taxons || []).map((t: any) => ({
+      ...t,
+      products: filterProducts(t.products || [])
+    })).filter(t => t.products.length > 0);
+
+    const filteredUncategorized = filterProducts(uncategorizedProducts || []);
+
+    return { filteredTaxons, filteredUncategorized };
+  }, [taxons, uncategorizedProducts, filter]);
+
+  const groupedProducts = useMemo(() => {
+    const groups: any = {};
+    
+    // Process categorized products
+    filteredData.filteredTaxons.forEach((t: any) => {
+      const taxonomy = t.taxonomy || "Sem Categoria";
+      const taxon = t.name || "Geral";
+      
+      if (!groups[taxonomy]) groups[taxonomy] = {};
+      
+      t.products.forEach((p: any) => {
+        if (!groups[taxonomy][taxon]) groups[taxonomy][taxon] = [];
+        // Only add if not already in this taxon group
+        if (!groups[taxonomy][taxon].find((existing: any) => existing._id === p._id)) {
+          groups[taxonomy][taxon].push(p);
+        }
+      });
+    });
+
+    // Process uncategorized products
+    // Determine which products have been categorized at all
+    const categorizedProductIds = new Set();
+    filteredData.filteredTaxons.forEach(t => t.products.forEach((p: any) => categorizedProductIds.add(p._id)));
+    
+    const uncategorized = (filteredData.filteredUncategorized || []).filter(p => !categorizedProductIds.has(p._id));
+    
+    if (uncategorized.length > 0) {
+      if (!groups["Sem Categoria"]) groups["Sem Categoria"] = {};
+      groups["Sem Categoria"]["Geral"] = uncategorized;
+    }
+
+    return groups;
+  }, [filteredData]);
 
   return (
     <div className="p-4 md:p-8 bg-background min-h-screen text-foreground">
+      {/* ... (keep header and session block unchanged) ... */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Dashboard de Estúdio</h1>
         <Button asChild variant="outline">
@@ -170,69 +241,84 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-card border border-border p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Catálogo</h2>
-          <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-            {filteredProducts.map((p: any) => {
-              const hasActiveVariant = p.variantes?.some((v: any) => sessions.some((s: any) => s.sku === v.sku));
-              return (
-                <details key={p._id} className={cn("bg-muted rounded p-2 transition-all", hasActiveVariant && "ring-2 ring-sky-500")} open={filter.length > 0}>
-                  <summary className={cn("font-medium cursor-pointer text-sm flex items-center justify-between", hasActiveVariant && "text-sky-700")}>
-                    <div className="flex items-center">
-                      <span className="font-mono text-xs text-primary mr-2">
-                          <Highlight text={p.sku || ""} query={filter} />
-                      </span>
-                      <span className="text-foreground">
-                          <Highlight text={p.name || ""} query={filter} />
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      {hasActiveVariant && <div className="w-2 h-2 rounded-full bg-sky-500 mr-2 animate-pulse" />}
-                      <span className="text-blue-500 font-normal">({p.variantes?.length || 0})</span>
-                    </div>
-                  </summary>
-                  <div className="w-full mt-2 border-t border-border">
-                    {p.variantes?.map((v: any) => {
-                      const isActive = sessions.some((s: any) => s.sku === v.sku);
-                      return (
-                        <div id={`variant-${v.sku}`} key={v.sku} className="flex items-center justify-between py-2 border-b border-border text-sm">
-                          <span className="font-mono text-xs text-sky-600">
-                            <Highlight text={v.sku || ""} query={filter} />
-                          </span>
-                          <span className="truncate mx-2">
-                            <Highlight text={v.name || ""} query={filter} />
-                          </span>
-                          {isActive ? (
-                            <Form method="post" className="flex gap-2">
-                              <Button disabled size="sm" variant="outline" className="text-sky-600 border-sky-600">
-                                Ativo
-                              </Button>
-                              <input type="hidden" name="id" value={sessions.find(s => s.sku === v.sku)?.id} />
-                              <Button
-                                type="submit"
-                                name="intent"
-                                value="stop"
-                                size="sm"
-                                className="bg-amber-500 text-gray-900 hover:bg-amber-600 hover:scale-105 transition-all duration-200"
-                              >
-                                Parar
-                              </Button>
-                            </Form>
-                          ) : (
-                            <Form method="post" onSubmit={(e) => handleStartSession(e, v.sku)}>
-                              <input type="hidden" name="sku" value={v.sku} />
-                              <input type="hidden" name="variante" value={v.name} />
-                              <Button type="submit" name="intent" value="start" size="sm">
-                                Iniciar
-                              </Button>
-                            </Form>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-              );
-            })}
+          <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+            {Object.entries(groupedProducts).map(([taxonomy, taxons]: [string, any]) => (
+              <details key={taxonomy} open className="bg-slate-50 rounded-lg p-2">
+                <summary className="font-bold text-lg cursor-pointer text-slate-800">{taxonomy}</summary>
+                <div className="pl-4 space-y-2 mt-2">
+                  {Object.entries(taxons).map(([taxon, products]: [string, any]) => (
+                    <details key={taxon} open className="bg-slate-100 rounded p-2">
+                      <summary className="font-semibold text-md cursor-pointer text-slate-700">{taxon}</summary>
+                      <div className="pl-4 space-y-1 mt-1">
+                        {products.map((p: any) => {
+                          const hasActiveVariant = p.variantes?.some((v: any) => sessions.some((s: any) => s.sku === v.sku));
+                          return (
+                            <details key={p._id} className={cn("bg-white border border-border rounded p-2 transition-all", hasActiveVariant && "ring-2 ring-sky-500")} open={filter.length > 0}>
+                              <summary className={cn("font-medium cursor-pointer text-sm flex items-center justify-between", hasActiveVariant && "text-sky-700")}>
+                                <div className="flex items-center">
+                                  <span className="font-mono text-xs text-primary mr-2">
+                                      <Highlight text={p.sku || ""} query={filter} />
+                                  </span>
+                                  <span className="text-foreground">
+                                      <Highlight text={p.name || ""} query={filter} />
+                                  </span>
+                                </div>
+                                <div className="flex items-center">
+                                  {hasActiveVariant && <div className="w-2 h-2 rounded-full bg-sky-500 mr-2 animate-pulse" />}
+                                  <span className="text-blue-500 font-normal">({p.variantes?.length || 0})</span>
+                                </div>
+                              </summary>
+                              <div className="w-full mt-2 border-t border-border">
+                                {p.variantes?.map((v: any) => {
+                                  const isActive = sessions.some((s: any) => s.sku === v.sku);
+                                  return (
+                                    <div id={`variant-${v.sku}`} key={v.sku} className="flex items-center justify-between py-2 border-b border-border text-sm">
+                                      <span className="font-mono text-xs text-sky-600">
+                                        <Highlight text={v.sku || ""} query={filter} />
+                                      </span>
+                                      <span className="truncate mx-2">
+                                        <Highlight text={v.name || ""} query={filter} />
+                                      </span>
+                                      {isActive ? (
+                                        <Form method="post" className="flex gap-2">
+                                          <Button disabled size="sm" variant="outline" className="text-sky-600 border-sky-600">
+                                            Ativo
+                                          </Button>
+                                          <input type="hidden" name="id" value={sessions.find(s => s.sku === v.sku)?.id} />
+                                          <Button
+                                            type="submit"
+                                            name="intent"
+                                            value="stop"
+                                            size="sm"
+                                            className="bg-amber-500 text-gray-900 hover:bg-amber-600 hover:scale-105 transition-all duration-200"
+                                          >
+                                            Parar
+                                          </Button>
+                                        </Form>
+                                      ) : (
+                                        <Form method="post" onSubmit={(e) => handleStartSession(e, v.sku)}>
+                                          <input type="hidden" name="sku" value={v.sku} />
+                                          <input type="hidden" name="variante" value={v.name} />
+                                          <Button type="submit" name="intent" value="start" size="sm">
+                                            Iniciar
+                                          </Button>
+                                        </Form>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </details>
+            ))}
           </div>
+
 
 
           <h2 className="text-lg font-semibold mt-8 mb-4 text-destructive">Falhas</h2>
