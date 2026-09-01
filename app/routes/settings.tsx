@@ -15,6 +15,12 @@ export async function action({ request }: { request: Request }) {
   const formData = await request.formData();
   const settings = Object.fromEntries(formData);
   
+  // Ensure checkbox values are explicitly set
+  const finalSettings = {
+    ...settings,
+    bg_removal: formData.has("bg_removal") ? "true" : "false"
+  };
+  
   const stmt = db.prepare("INSERT OR REPLACE INTO studio_settings (key, value) VALUES (?, ?)");
   const transaction = db.transaction((data) => {
     for (const [key, value] of Object.entries(data)) {
@@ -22,7 +28,7 @@ export async function action({ request }: { request: Request }) {
     }
   });
   
-  transaction(settings);
+  transaction(finalSettings);
   return { success: true };
 }
 
@@ -81,7 +87,34 @@ export default function Settings() {
               </label>
               <input type="text" name="brand_slug" className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" defaultValue={settings.brand_slug || ""} />
             </div>
-            <Button type="submit" className="w-full gap-2 mt-2">
+            <div className="space-y-4 border-t pt-4 mt-4">
+              <h3 className="font-semibold text-slate-800">Processamento de Imagem</h3>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Largura Máxima (px):</label>
+                <input type="number" name="max_width" className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg" defaultValue={settings.max_width || "1200"} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Qualidade:</label>
+                <select name="image_quality" className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg" defaultValue={settings.image_quality || "auto"}>
+                  <option value="auto">Automática</option>
+                  <option value="80">80%</option>
+                  <option value="90">90%</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 flex items-center justify-between border-t pt-4 mt-2">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <SettingsIcon className="h-4 w-4 text-slate-400" /> Remover Fundo (AI)
+              </label>
+              <input 
+                type="checkbox" 
+                name="bg_removal" 
+                className="w-5 h-5 accent-sky-600 cursor-pointer" 
+                defaultChecked={settings.bg_removal === "true"} 
+              />
+            </div>
+            <Button type="submit" className="w-full gap-2 mt-4">
                 <Save className="h-4 w-4" /> Salvar Alterações
             </Button>
           </div>

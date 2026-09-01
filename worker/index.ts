@@ -46,9 +46,28 @@ export async function processQueue() {
     const folderConfig = db.prepare("SELECT value FROM studio_settings WHERE key = 'cloudinary_folder'").get() as { value: string } | undefined;
     const uploadFolder = folderConfig?.value || "ecommerce_photos";
 
-    const result = await cloudinary.uploader.upload(item.caminho_local, {
+    const bgRemovalConfig = db.prepare("SELECT value FROM studio_settings WHERE key = 'bg_removal'").get() as { value: string } | undefined;
+    const shouldRemoveBg = bgRemovalConfig?.value === "true";
+
+    const maxWidthConfig = db.prepare("SELECT value FROM studio_settings WHERE key = 'max_width'").get() as { value: string } | undefined;
+    const maxWidth = parseInt(maxWidthConfig?.value || "1200", 10);
+
+    const qualityConfig = db.prepare("SELECT value FROM studio_settings WHERE key = 'image_quality'").get() as { value: string } | undefined;
+    const quality = qualityConfig?.value || "auto";
+
+    const uploadOptions: any = {
       folder: uploadFolder,
-    });
+      transformation: [
+          { width: maxWidth, crop: "limit" },
+          { quality: quality, fetch_format: "auto" }
+      ]
+    };
+    
+    if (shouldRemoveBg) {
+        uploadOptions.background_removal = "cloudinary_ai";
+    }
+
+    const result = await cloudinary.uploader.upload(item.caminho_local, uploadOptions);
 
     // Patch Sanity
     await sanityClient
