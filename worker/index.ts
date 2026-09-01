@@ -12,7 +12,6 @@ const MAX_RETRIES = 3;
 // ... (resto do código igual) ...
 import url from "url";
 
-// ... (imports) ...
 
 // Corrigir verificação de ESM para execução direta
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
@@ -44,8 +43,11 @@ export async function processQueue() {
     db.prepare("UPDATE upload_queue SET estado = 'Em Upload' WHERE id = ?").run(item.id);
 
     // Upload to Cloudinary
+    const folderConfig = db.prepare("SELECT value FROM studio_settings WHERE key = 'cloudinary_folder'").get() as { value: string } | undefined;
+    const uploadFolder = folderConfig?.value || "ecommerce_photos";
+
     const result = await cloudinary.uploader.upload(item.caminho_local, {
-      folder: "ecommerce_photos",
+      folder: uploadFolder,
     });
 
     // Patch Sanity

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
-    "dev": "react-router dev && tsx worker/index.ts",
+    "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js && tsx worker/index.ts",
     "typecheck": "react-router typegen && tsc",
     "worker": "tsx worker/index.ts"
